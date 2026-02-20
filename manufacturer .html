@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Manufacturer Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9fafb;
+      padding: 2rem;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #4f46e5;
+    }
+    label {
+      display: block;
+      margin: 1rem 0 0.25rem;
+    }
+    input, button {
+      width: 100%;
+      padding: 0.6rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    button {
+      margin-top: 1.5rem;
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #4338ca;
+    }
+    .status {
+      margin-top: 1rem;
+      color: green;
+    }
+    .qr-section {
+      margin-top: 2rem;
+      text-align: center;
+    }
+    canvas {
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Manufacturer Dashboard</h1>
+  <button onclick="connectWallet()">🔗 Connect MetaMask</button>
+  <div id="wallet" style="margin-top: 1rem; font-weight: bold;"></div>
+
+  <label for="batchId">Batch ID</label>
+  <input type="text" id="batchId" placeholder="Enter Batch ID" />
+
+  <label for="description">Description</label>
+  <input type="text" id="description" placeholder="Enter drug description" />
+
+  <button onclick="createBatch()">📦 Create Batch & Generate QR</button>
+  <div class="status" id="status"></div>
+
+  <div class="qr-section" id="qrContainer" style="display: none;">
+    <p>QR Code for this batch:</p>
+    <canvas id="qrCanvas"></canvas>
+    <br />
+    <a id="downloadLink" download="batch_qr.png">⬇️ Download QR Code</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+<script>
+  let userWallet = "";
+
+  async function connectWallet() {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        userWallet = accounts[0];
+        document.getElementById("wallet").innerText = `Connected: ${userWallet}`;
+      } catch (err) {
+        alert("Wallet connection failed");
+        console.error(err);
+      }
+    } else {
+      alert("Please install MetaMask!");
+    }
+  }
+
+  function createBatch() {
+    const batchId = document.getElementById("batchId").value.trim();
+    const description = document.getElementById("description").value.trim();
+
+    if (!batchId || !description || !userWallet) {
+      alert("Please fill in all fields and connect wallet.");
+      return;
+    }
+
+    const payload = JSON.stringify({
+      batchId,
+      description,
+      manufacturer: userWallet,
+      timestamp: new Date().toISOString()
+    });
+
+    document.getElementById("status").innerText = "✅ Batch created successfully!";
+    generateQRCode(payload);
+  }
+
+  function generateQRCode(text) {
+    const qr = new QRious({
+      element: document.getElementById("qrCanvas"),
+      value: text,
+      size: 200
+    });
+
+    const dataURL = document.getElementById("qrCanvas").toDataURL("image/png");
+    document.getElementById("downloadLink").href = dataURL;
+    document.getElementById("qrContainer").style.display = "block";
+  }
+</script>
+
+</body>
+</html>

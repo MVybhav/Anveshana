@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedChain - Distributor Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
+    <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #bae6fd 100%);
+        }
+        .status-pending { background-color: #fef3c7; color: #92400e; }
+        .status-intransit { background-color: #dbeafe; color: #1e40af; }
+        .status-delivered { background-color: #d1fae5; color: #065f46; }
+        .status-verified { background-color: #ecfccb; color: #3f6212; }
+        #video-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        #video {
+            width: 100%;
+            display: block;
+        }
+        #scan-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #scan-box {
+            width: 70%;
+            height: 70%;
+            border: 4px solid rgba(255, 255, 255, 0.8);
+            border-radius: 0.5rem;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8">
+            <div class="flex items-center space-x-2">
+                <img src="https://placehold.co/40x40" alt="MedChain logo with a blue medical cross and blockchain nodes" class="rounded-full">
+                <h1 class="text-2xl font-bold text-blue-800">MedChain Distributor</h1>
+            </div>
+            <div>
+                <button id="connectWalletBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    Connect Wallet
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Wallet & Status -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Wallet & Blockchain Status</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Wallet Address</p>
+                            <p id="walletAddress" class="text-gray-700 font-mono truncate">Not Connected</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Network</p>
+                            <p id="network" class="text-gray-700">Not Connected</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Balance</p>
+                            <p id="balance" class="text-gray-700">-</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Chain ID</p>
+                            <p id="chainId" class="text-gray-700">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- QR Scanner -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">QR Code Scanner</h2>
+                    <div class="flex flex-col items-center space-y-4">
+                        <div id="video-container">
+                            <video id="video" muted playsinline></video>
+                            <div id="scan-overlay">
+                                <div id="scan-box"></div>
+                            </div>
+                        </div>
+                        <button id="startScannerBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors w-full max-w-xs">
+                            Start Scanner
+                        </button>
+                        <button id="stopScannerBtn" class="hidden bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors w-full max-w-xs">
+                            Stop Scanner
+                        </button>
+                        <div id="qrResult" class="text-center p-4 bg-gray-100 rounded-lg w-full hidden">
+                            <h3 class="font-medium text-gray-800">Scanned QR Code</h3>
+                            <p id="qrData" class="mt-2 text-sm text-gray-600"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shipment Details -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Shipment Information</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="batchId" class="block text-sm font-medium text-gray-700">Batch ID</label>
+                            <input type="text" id="batchId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                        </div>
+                        <div>
+                            <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+                            <select id="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                                <option value="pending">Pending</option>
+                                <option value="in-transit">In Transit</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="verified">Verified</option>
+                            </select>
+                        </div>
+                        <button id="updateStatusBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors w-full">
+                            Update Status
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="space-y-6">
+                <!-- Recent Transactions -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Recent Transactions</h2>
+                    <div class="space-y-3">
+                        <div class="text-center p-4 bg-gray-100 rounded-lg">
+                            <p class="text-sm text-gray-500">No transactions yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shipment History -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Shipment History</h2>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 rounded-lg status-pending">
+                            <div>
+                                <p class="font-medium">Batch #MC-2345</p>
+                                <p class="text-xs">Received from: 0x1a2...3b4c</p>
+                            </div>
+                            <span class="text-xs font-medium px-2 py-1 rounded">Pending</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 rounded-lg status-intransit">
+                            <div>
+                                <p class="font-medium">Batch #MC-1987</p>
+                                <p class="text-xs">Received from: 0x5d6...7e8f</p>
+                            </div>
+                            <span class="text-xs font-medium px-2 py-1 rounded">In Transit</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 rounded-lg status-delivered">
+                            <div>
+                                <p class="font-medium">Batch #MC-1562</p>
+                                <p class="text-xs">Received from: 0x9a0...1b2c</p>
+                            </div>
+                            <span class="text-xs font-medium px-2 py-1 rounded">Delivered</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Supply Chain Analytics</h2>
+                    <canvas id="shipmentChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Web3 Wallet Connection
+        let web3;
+        let accounts = [];
+        let qrScanner;
+        let shipmentChart;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+            connectWalletBtn.addEventListener('click', connectWallet);
+            // Start QR scanner automatically
+            startQRScanner();
+            stopScannerBtn.addEventListener('click', stopQRScanner);
+            updateStatusBtn.addEventListener('click', updateShipmentStatus);
+        });
+
+        async function connectWallet() {
+            try {
+                if (window.ethereum) {
+                    web3 = new Web3(window.ethereum);
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    
+                    accounts = await web3.eth.getAccounts();
+                    const networkId = await web3.eth.net.getId();
+                    const balance = await web3.eth.getBalance(accounts[0]);
+                    const network = await web3.eth.net.getNetworkType();
+                    
+                    document.getElementById('walletAddress').textContent = accounts[0];
+                    document.getElementById('network').textContent = network;
+                    document.getElementById('balance').textContent = web3.utils.fromWei(balance, 'ether') + ' ETH';
+                    document.getElementById('chainId').textContent = networkId;
+                    
+                    document.getElementById('connectWalletBtn').textContent = 'Connected';
+                    document.getElementById('connectWalletBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    document.getElementById('connectWalletBtn').classList.add('bg-green-600', 'hover:bg-green-700');
+                    
+                    // Listen for account changes
+                    window.ethereum.on('accountsChanged', (newAccounts) => {
+                        accounts = newAccounts;
+                        document.getElementById('walletAddress').textContent = accounts[0] || 'Not Connected';
+                        if (!accounts.length) {
+                            document.getElementById('connectWalletBtn').textContent = 'Connect Wallet';
+                            document.getElementById('connectWalletBtn').classList.remove('bg-green-600', 'hover:bg-green-700');
+                            document.getElementById('connectWalletBtn').classList.add('bg-blue-600', 'hover:bg-blue-700');
+                        }
+                    });
+                    
+                    // Listen for chain changes
+                    window.ethereum.on('chainChanged', () => {
+                        window.location.reload();
+                    });
+                    
+                } else {
+                    alert('Please install MetaMask or another Ethereum wallet extension!');
+                }
+            } catch (error) {
+                console.error('Error connecting wallet:', error);
+                alert('Error connecting wallet: ' + error.message);
+            }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('shipmentChart').getContext('2d');
+            shipmentChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pending', 'In Transit', 'Delivered', 'Verified'],
+                    datasets: [{
+                        data: [12, 7, 5, 3],
+                        backgroundColor: [
+                            'rgba(253, 224, 71, 0.7)',
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(16, 185, 129, 0.7)',
+                            'rgba(132, 204, 22, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(253, 224, 71, 1)',
+                            'rgba(59, 130, 246, 1)',
+                            'rgba(16, 185, 129, 1)',
+                            'rgba(132, 204, 22, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Shipment Status Distribution',
+                            font: {
+                                size: 14
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function startQRScanner() {
+            const videoElement = document.getElementById('video');
+            document.getElementById('scan-overlay').style.display = 'none'; // Hide overlay
+
+            qrScanner = new QrScanner(
+                videoElement,
+                result => {
+                    console.log('QR code scanned:', result);
+                    document.getElementById('qrData').textContent = result;
+                    document.getElementById('qrResult').classList.remove('hidden');
+                    document.getElementById('batchId').value = result;
+                    stopQRScanner();
+                },
+                {
+                    preferredCamera: 'environment',
+                    highlightScanRegion: true,
+                    highlightCodeOutline: true,
+                }
+            );
+
+            qrScanner.start().then(() => {
+                document.getElementById('startScannerBtn').classList.add('hidden');
+                document.getElementById('stopScannerBtn').classList.remove('hidden');
+            }).catch(err => {
+                console.error('Error starting QR scanner:', err);
+                alert('Error starting camera: ' + err);
+            });
+        }
+
+        function stopQRScanner() {
+            if (qrScanner) {
+                qrScanner.stop();
+                qrScanner = null;
+                document.getElementById('startScannerBtn').classList.remove('hidden');
+                document.getElementById('stopScannerBtn').classList.add('hidden');
+                document.getElementById('scan-overlay').style.display = 'flex'; // Show overlay
+            }
+        }
+
+        async function updateShipmentStatus() {
+            const batchId = document.getElementById('batchId').value;
+            const status = document.getElementById('status').value;
+            
+            if (!batchId) {
+                alert('Please scan or enter a Batch ID');
+                return;
+            }
+            
+            // Here we would normally interact with the smart contract
+            // For demo purposes, we'll simulate this with a timeout
+            
+            try {
+                if (!accounts.length) {
+                    throw new Error('Please connect your wallet first');
+                }
+                
+                // Simulate blockchain transaction
+                console.log(`Updating batch ${batchId} to status ${status}`);
+                
+                // For demo, just add to the history
+                addToShipmentHistory(batchId, status);
+                
+                alert(`Successfully updated Batch ${batchId} to ${status}`);
+                document.getElementById('batchId').value = '';
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Error updating status: ' + error.message);
+            }
+        }
+
+        function addToShipmentHistory(batchId, status) {
+            const historyDiv = document.querySelector('.bg-white.rounded-xl.shadow-md.p-6:nth-child(2) .space-y-3');
+            const statusText = status.split('-').map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
+            const statusClass = `status-${status.replace(' ', '-')}`;
+            
+            const newEntry = document.createElement('div');
+            newEntry.className = `flex justify-between items-center p-3 rounded-lg ${statusClass}`;
+            newEntry.innerHTML = `
+                <div>
+                    <p class="font-medium">Batch #${batchId}</p>
+                    <p class="text-xs">Received from: ${accounts[0] ? accounts[0].substring(0,4) + '...' + accounts[0].substring(38) : 'Unknown'}</p>
+                </div>
+                <span class="text-xs font-medium px-2 py-1 rounded">${statusText}</span>
+            `;
+            
+            historyDiv.prepend(newEntry);
+            
+            // Update the chart (simplified)
+            updateChart(status);
+        }
+
+        function updateChart(status) {
+            // Simplified update for demo
+            const labels = shipmentChart.data.labels;
+            const data = shipmentChart.data.datasets[0].data;
+            
+            const statusIndex = {
+                'pending': 0,
+                'in-transit': 1,
+                'delivered': 2,
+                'verified': 3
+            }[status];
+            
+            if (statusIndex !== undefined) {
+                data[statusIndex]++;
+                shipmentChart.update();
+            }
+        }
+    </script>
+</body>
+</html>
