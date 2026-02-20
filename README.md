@@ -75,3 +75,5 @@ Database: MySQL
 Server: Apache (XAMPP)
 
 Tools: VS Code, phpMyAdmin
+
+Project url:http://localhost:8000/
